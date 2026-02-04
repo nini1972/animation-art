@@ -11,7 +11,7 @@ import { getRandomStyle, fileToBase64, TYPOGRAPHY_SUGGESTIONS, createGifFromVide
 import { 
   Loader2, Paintbrush, Play, Type, Sparkles, Image as ImageIcon, X, Upload, 
   Download, FileType, Wand2, Volume2, VolumeX, ChevronLeft, ChevronRight, 
-  ArrowLeft, Video as VideoIcon, Key, Music, Headphones, Disc, Trash2
+  ArrowLeft, Video as VideoIcon, Key, Music, Headphones, Disc, Trash2, History, CheckCircle2
 } from 'lucide-react';
 
 interface Video {
@@ -19,6 +19,14 @@ interface Video {
   title: string;
   videoUrl: string;
   description: string;
+}
+
+interface Creation {
+  id: string;
+  text: string;
+  videoUrl: string;
+  timestamp: number;
+  style: string;
 }
 
 interface MusicTrack {
@@ -185,6 +193,9 @@ const App: React.FC = () => {
   const [typographyPrompt, setTypographyPrompt] = useState<string>("");
   const [referenceImage, setReferenceImage] = useState<string | null>(null);
   
+  const [creations, setCreations] = useState<Creation[]>([]);
+  const [showAutoSaveToast, setShowAutoSaveToast] = useState(false);
+
   // Music state
   const [selectedMusicUrl, setSelectedMusicUrl] = useState<string | null>(null);
   const [customMusicUrl, setCustomMusicUrl] = useState<string | null>(null);
@@ -200,6 +211,7 @@ const App: React.FC = () => {
   const musicInputRef = useRef<HTMLInputElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const lastAutosavedUrl = useRef<string | null>(null);
 
   useEffect(() => {
     if (state === AppState.GENERATING_IMAGE || state === AppState.GENERATING_VIDEO || state === AppState.PLAYING) {
@@ -224,6 +236,32 @@ const App: React.FC = () => {
       audioRef.current.muted = isMusicMuted;
     }
   }, [isMusicMuted]);
+
+  // Automatic saving effect
+  useEffect(() => {
+    if (state === AppState.PLAYING && videoSrc && videoSrc !== lastAutosavedUrl.current) {
+      lastAutosavedUrl.current = videoSrc;
+      
+      // Automatic download
+      handleDownload();
+      
+      // Show confirmation toast
+      setShowAutoSaveToast(true);
+      setTimeout(() => setShowAutoSaveToast(false), 3000);
+
+      // Save to session history (virtual output folder)
+      setCreations(prev => [
+        {
+          id: Math.random().toString(36).substr(2, 9),
+          text: inputText,
+          videoUrl: videoSrc,
+          timestamp: Date.now(),
+          style: inputStyle || "Default"
+        },
+        ...prev
+      ]);
+    }
+  }, [state, videoSrc]);
 
   const handleSelectKey = async () => {
     setShowKeyDialog(false);
@@ -360,7 +398,13 @@ const App: React.FC = () => {
 
     if (state === AppState.GENERATING_IMAGE || state === AppState.GENERATING_VIDEO || state === AppState.PLAYING) {
       return (
-        <div className="w-full h-full flex flex-col items-center justify-center p-4 md:p-8 bg-stone-50 dark:bg-zinc-950">
+        <div className="w-full h-full flex flex-col items-center justify-center p-4 md:p-8 bg-stone-50 dark:bg-zinc-950 relative">
+          {showAutoSaveToast && (
+            <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[60] bg-emerald-500 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 text-xs font-bold animate-in slide-in-from-top-4 fade-in duration-300">
+               <CheckCircle2 size={14} /> Saved to Downloads
+            </div>
+          )}
+
           <div className={`flex items-center gap-3 px-5 py-2 rounded-full mb-6 transition-all duration-500 ${state === AppState.PLAYING ? 'opacity-0 h-0 mb-0 overflow-hidden' : 'bg-white dark:bg-zinc-900 shadow-sm border border-stone-100 dark:border-zinc-800'}`}>
              <Loader2 size={16} className="animate-spin text-stone-400 dark:text-stone-500" />
              <span className="text-sm font-medium text-stone-600 dark:text-stone-300 uppercase tracking-wide">{statusMessage}</span>
@@ -577,6 +621,75 @@ const App: React.FC = () => {
     );
   };
 
+  const renderDashboard = () => {
+    return (
+      <div className="h-full overflow-y-auto custom-scrollbar p-6 md:p-8 bg-white dark:bg-zinc-950 flex flex-col">
+        <div className="flex items-center justify-between mb-8">
+           <div>
+              <h2 className="text-3xl font-bold text-stone-900 dark:text-white tracking-tight">Library</h2>
+              <p className="text-sm text-stone-500 mt-1 font-medium">Your creative hub</p>
+           </div>
+           <button onClick={handleMainCta} className="px-6 py-2.5 bg-stone-900 dark:bg-stone-100 text-white dark:text-stone-900 rounded-full font-bold text-sm shadow-lg hover:scale-105 active:scale-95 transition-all flex items-center gap-2">
+             <VideoIcon size={16} /> New Design
+           </button>
+        </div>
+
+        {creations.length > 0 ? (
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div>
+              <h3 className="text-xs font-bold text-stone-400 dark:text-zinc-500 uppercase tracking-widest flex items-center gap-2 mb-4">
+                <History size={14} /> Recently Generated (Auto-saved)
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {creations.map((c) => (
+                  <div key={c.id} className="group relative bg-stone-50 dark:bg-zinc-900/50 border border-stone-100 dark:border-zinc-800 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300">
+                    <div className="aspect-video relative overflow-hidden">
+                       <video src={c.videoUrl} className="w-full h-full object-cover" muted playsInline onMouseEnter={(e) => e.currentTarget.play()} onMouseLeave={(e) => { e.currentTarget.pause(); e.currentTarget.currentTime = 0; }} />
+                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+                         <Play size={32} className="text-white fill-current opacity-80" />
+                       </div>
+                    </div>
+                    <div className="p-4">
+                       <h4 className="font-bold text-stone-900 dark:text-white truncate">"{c.text}"</h4>
+                       <p className="text-[10px] text-stone-400 dark:text-zinc-500 mt-1 line-clamp-1">{c.style}</p>
+                       <div className="mt-4 flex items-center justify-between">
+                          <span className="text-[10px] font-bold text-stone-400 dark:text-zinc-600 uppercase">
+                            {new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <button 
+                            onClick={() => {
+                              const a = document.createElement('a');
+                              a.href = c.videoUrl;
+                              a.download = `typemotion-${c.text}-${Date.now()}.mp4`;
+                              document.body.appendChild(a);
+                              a.click();
+                              document.body.removeChild(a);
+                            }}
+                            className="p-2 bg-white dark:bg-zinc-800 text-stone-600 dark:text-stone-300 hover:text-stone-900 dark:hover:text-white rounded-lg border border-stone-200 dark:border-zinc-700 shadow-sm transition-all active:scale-90"
+                            title="Download again"
+                          >
+                            <Download size={14} />
+                          </button>
+                       </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
+             <div className="w-20 h-20 bg-stone-100 dark:bg-zinc-900 rounded-3xl flex items-center justify-center mb-6 text-stone-300 dark:text-zinc-700">
+               <VideoIcon size={32} />
+             </div>
+             <h3 className="text-lg font-bold text-stone-900 dark:text-white mb-2">Your Output Folder is Empty</h3>
+             <p className="text-stone-400 dark:text-zinc-500 text-sm max-w-xs mx-auto">Generate cinematic animations to see them saved here automatically during this session.</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const isFlip = viewMode === 'create';
 
   return (
@@ -611,7 +724,7 @@ const App: React.FC = () => {
                 </div>
                 <div className="absolute inset-0 w-full h-full [backface-visibility:hidden] [transform:rotateY(180deg)] bg-white dark:bg-zinc-950 rounded-3xl overflow-hidden border border-stone-100 dark:border-zinc-800">
                    <button onClick={() => setViewMode('gallery')} className="absolute top-4 right-4 z-50 p-2 bg-stone-100 dark:bg-zinc-800 hover:bg-stone-200 dark:hover:bg-zinc-700 text-stone-500 dark:text-stone-400 rounded-full transition-colors" title="Back to Gallery"><X size={20} /></button>
-                   {renderAppContent()}
+                   {isFlip ? renderAppContent() : renderDashboard()}
                 </div>
              </div>
           </div>
@@ -627,6 +740,19 @@ const App: React.FC = () => {
         @keyframes spin {
           from { transform: rotate(0deg); }
           to { transform: rotate(360deg); }
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #e2e2e2;
+          border-radius: 10px;
+        }
+        .dark .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #27272a;
         }
       `}</style>
     </div>
