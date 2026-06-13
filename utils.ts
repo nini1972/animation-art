@@ -40,7 +40,8 @@ export const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
-export const createGifFromVideo = async (videoUrl: string): Promise<Blob> => {
+export const createGifFromVideo = async (videoUrl: string, options: { repeat?: number } = {}): Promise<Blob> => {
+  const { repeat = 0 } = options;
   // Runtime check just in case, though standard imports should throw earlier if failed
   if (typeof GIFEncoder !== 'function') {
     throw new Error("GIF library failed to load correctly. Please refresh the page.");
@@ -104,7 +105,7 @@ export const createGifFromVideo = async (videoUrl: string): Promise<Blob> => {
           const palette = quantize(data, 256);
           const index = applyPalette(data, palette);
           
-          gif.writeFrame(index, width, height, { palette, delay: 1000 / fps });
+          gif.writeFrame(index, width, height, { palette, delay: 1000 / fps, repeat });
         }
         
         gif.finish();

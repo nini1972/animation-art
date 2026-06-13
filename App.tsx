@@ -11,7 +11,7 @@ import { getRandomStyle, fileToBase64, TYPOGRAPHY_SUGGESTIONS, createGifFromVide
 import { 
   Loader2, Paintbrush, Play, Type, Sparkles, Image as ImageIcon, X, Upload, 
   Download, FileType, Wand2, Volume2, VolumeX, ChevronLeft, ChevronRight, 
-  ArrowLeft, Video as VideoIcon, Key, Music, Headphones, Disc, Trash2, History, CheckCircle2
+  ArrowLeft, Video as VideoIcon, Key, Music, Headphones, Disc, Trash2, History, CheckCircle2, Repeat
 } from 'lucide-react';
 
 interface Video {
@@ -27,6 +27,7 @@ interface Creation {
   videoUrl: string;
   timestamp: number;
   style: string;
+  loop?: boolean;
 }
 
 interface MusicTrack {
@@ -195,6 +196,7 @@ const App: React.FC = () => {
   
   const [creations, setCreations] = useState<Creation[]>([]);
   const [showAutoSaveToast, setShowAutoSaveToast] = useState(false);
+  const [loopVideo, setLoopVideo] = useState<boolean>(true);
 
   // Music state
   const [selectedMusicUrl, setSelectedMusicUrl] = useState<string | null>(null);
@@ -223,13 +225,13 @@ const App: React.FC = () => {
   useEffect(() => {
     if (state === AppState.PLAYING && selectedMusicUrl && audioRef.current) {
       audioRef.current.volume = 0.5;
-      audioRef.current.loop = true;
+      audioRef.current.loop = loopVideo;
       audioRef.current.play().catch(e => console.warn("Audio playback blocked", e));
     } else {
       audioRef.current?.pause();
       if (audioRef.current) audioRef.current.currentTime = 0;
     }
-  }, [state, selectedMusicUrl]);
+  }, [state, selectedMusicUrl, loopVideo]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -256,7 +258,8 @@ const App: React.FC = () => {
           text: inputText,
           videoUrl: videoSrc,
           timestamp: Date.now(),
-          style: inputStyle || "Default"
+          style: inputStyle || "Default",
+          loop: loopVideo
         },
         ...prev
       ]);
@@ -355,7 +358,7 @@ const App: React.FC = () => {
     if (!videoSrc) return;
     setIsGifGenerating(true);
     try {
-      const gifBlob = await createGifFromVideo(videoSrc);
+      const gifBlob = await createGifFromVideo(videoSrc, { repeat: loopVideo ? 0 : -1 });
       const gifUrl = URL.createObjectURL(gifBlob);
       const a = document.createElement('a');
       a.href = gifUrl;
@@ -433,12 +436,16 @@ const App: React.FC = () => {
                   ref={videoRef}
                   src={videoSrc} 
                   autoPlay 
-                  loop 
+                  loop={loopVideo} 
                   playsInline 
                   controls 
                   className="w-full h-full object-cover animate-in fade-in duration-1000" 
                   onPlay={() => audioRef.current?.play()}
                   onPause={() => audioRef.current?.pause()}
+                  onEnded={() => {
+                    audioRef.current?.pause();
+                    if (audioRef.current) audioRef.current.currentTime = 0;
+                  }}
                 />
                 {selectedMusicUrl && (
                   <div className="absolute top-4 right-16 z-20">
@@ -461,6 +468,18 @@ const App: React.FC = () => {
                 Create Another
               </button>
               <div className="flex items-center gap-3 w-full md:w-auto justify-center md:justify-end">
+               <button 
+                onClick={() => setLoopVideo(!loopVideo)} 
+                className={`px-5 py-3 font-bold rounded-xl border text-sm transition-all flex items-center gap-2 ${
+                  loopVideo 
+                    ? 'bg-stone-900 border-stone-900 text-white dark:bg-stone-100 dark:border-stone-100 dark:text-stone-900' 
+                    : 'bg-white dark:bg-zinc-900 border-stone-200 dark:border-zinc-700 text-stone-500 dark:text-stone-400 hover:bg-stone-50 dark:hover:bg-zinc-800'
+                }`}
+                title={loopVideo ? "Looping Enabled" : "Playing Once"}
+               >
+                 <Repeat size={16} className={loopVideo ? "animate-spin-slow" : "opacity-60"} />
+                 {loopVideo ? "Looping" : "Play Once"}
+               </button>
                <button onClick={handleDownloadGif} disabled={isGifGenerating} className="px-5 py-3 bg-white dark:bg-zinc-900 text-stone-900 dark:text-stone-200 border border-stone-200 dark:border-zinc-700 font-bold rounded-xl hover:bg-stone-50 dark:hover:bg-zinc-800 transition-colors flex items-center gap-2 disabled:opacity-50 text-sm">
                 {isGifGenerating ? <Loader2 size={16} className="animate-spin" /> : <FileType size={16} />} GIF
               </button>
